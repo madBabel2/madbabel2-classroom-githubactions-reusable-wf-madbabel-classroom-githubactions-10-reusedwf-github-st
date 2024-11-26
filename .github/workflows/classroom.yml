@@ -1,0 +1,85 @@
+name: Autograding Tests
+on:  
+  repository_dispatch:
+  workflow_dispatch:  
+permissions:
+  checks: write
+  actions: read
+  contents: read
+
+
+jobs:
+  get-workflow-id:
+    outputs:
+      run_id: ${{steps.get_workflow.outputs.run_id}}
+    runs-on: ubuntu-latest
+
+    steps:          
+      - name: Get workFlow Run
+        id: get_workflow
+        uses: madBabel/get-run-id-of-wf-action@v4
+        with:
+            workflow-file: '10.b-caller-workflow.yml'    
+            status: 'success'
+
+  checkJob1:   
+    needs: get-workflow-id
+    runs-on: ubuntu-latest    
+    outputs: 
+      stepsExecuted: ${{steps.check_Steps_for_JOB.outputs.stepsExecuted}}
+    steps:     
+ 
+      - name: Check step executed for JOB1
+        id: check_Steps_for_JOB
+        uses: madBabel/check-jobs-steps-gha-action@v4
+        with:
+          run-id: ${{needs.get-workflow-id.outputs.run_id}}
+          job-to-execute: callToWd     
+            
+
+  checkJob2:   
+      needs: get-workflow-id
+      runs-on: ubuntu-latest    
+      outputs: 
+        stepsExecuted: ${{steps.check_Steps_for_JOB.outputs.stepsExecuted}}
+      steps:     
+    
+        - name: Check step executed for JOB2
+          id: check_Steps_for_JOB
+          uses: madBabel/check-jobs-steps-gha-action@v4
+          with:
+            run-id: ${{needs.get-workflow-id.outputs.run_id}}
+            job-to-execute: checkDeploying     
+              
+  autograding-reporter:    
+      needs: [checkJob1,checkJob2]
+      runs-on: ubuntu-latest    
+      steps:           
+      - name: Run Autograding Step Tests for 1
+        uses: classroom-resources/autograding-io-grader@v1      
+        id: test1
+        with:
+            test-name: 'Test Step executed'   
+            command: 'echo ${{needs.checkJob1.outputs.stepsExecuted}}'
+            input: ''
+            expected-output: 'true'
+            comparison-method: 'exact'  
+            max-score: 50
+      - name: Run Autograding Step Tests for 2
+        uses: classroom-resources/autograding-io-grader@v1      
+        id: test2
+        with:
+            test-name: 'Test Step executed'   
+            command: 'echo ${{needs.checkJob2.outputs.stepsExecuted}}'
+            input: ''
+            expected-output: 'true'
+            comparison-method: 'exact'  
+            max-score: 50
+            
+      - name: Autograding Reporter
+        uses: classroom-resources/autograding-grading-reporter@v1     
+        with:
+           runners: test1,test2
+        env:
+          TEST1_RESULTS: "${{ steps.test1.outputs.result }}" 
+          TEST2_RESULTS: "${{ steps.test2.outputs.result }}"    
